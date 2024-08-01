@@ -1,0 +1,11 @@
+
+[submodule "3rdparty/pybind11"]
+	path = 3rdparty/pybind11
+	url = https://github.com/pybind/pybind11
+[submodule "3rdparty/liboqs"]
+	path = 3rdparty/liboqs
+	url = https://github.com/open-quantum-safe/liboqs
+	branch = main
+[submodule "3rdparty/wolfssl"]
+	path = 3rdparty/wolfssl
+	url = https://github.com/wolfssl/wolfssl
