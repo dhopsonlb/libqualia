@@ -19,9 +19,9 @@
 #ifndef QUALIA_NO_TLS
 
 #include "../include/qualiatls.h"
-#include "tests_serverprivkey.h"
-#include "tests_rootcert.h"
-#include "tests_servercert.h"
+#include "keys/tests_serverprivkey.h"
+#include "keys/tests_rootcert.h"
+#include "keys/tests_servercert.h"
 
 #define TLS_TEST_STRING "boogers"
 

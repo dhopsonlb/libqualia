@@ -13,6 +13,7 @@ b/
 **/*.csr
 tests/*.h
 tests/*.hpp
+tests/keys
 certs/file2header
 certs/file2header.exe
 certs/*.h

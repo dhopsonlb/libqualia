@@ -881,7 +881,9 @@ QualiaTLSServer *QualiaTLSServer_Init(const QualiaTLSServerParams *const Params,
     {
 		if (ErrOut)
 		{
-			Params->Snprintf(ErrOut, ErrOutCapacity, "Failed on wolfSSL_CTX_use_certificate_buffer ServerCert, got error integer %i", Err);
+			const int SSLErr = ERR_get_error();
+
+			Params->Snprintf(ErrOut, ErrOutCapacity, "Failed on wolfSSL_CTX_use_certificate_buffer ServerCert, got error integer %i", SSLErr);
 		}
 
 		X509_free(RCert);
