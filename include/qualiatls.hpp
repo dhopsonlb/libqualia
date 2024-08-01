@@ -16,6 +16,12 @@ namespace Qualia
 		typedef void OnDisconnectType(TLSConnection &Conn, void *Userdata);
 		typedef void OnConnectType(TLSConnection &Conn, const std::string &Hostname, const uint16_t PortNum, void *Userdata);
 
+		//No copies or moves, they invalidate pointers passed into the C layer.
+		TLSConnection(const TLSConnection&) = delete;
+		TLSConnection &operator=(const TLSConnection&) = delete;
+		TLSConnection &operator=(TLSConnection&&) = delete;
+		TLSConnection(TLSConnection &&Other) = delete;
+			
 	private:
 		QualiaContext *Ctx;
 		void *CBUserdata;
@@ -30,6 +36,8 @@ namespace Qualia
 		{
 			TLSConnection *const Us = static_cast<TLSConnection*>(Userdata);
 
+			if (!Us) return;
+
 			if (Us->OnRecvStream)
 			{
 				(*Us->OnRecvStream)(*Us, Stream{ RecvStream }, Us->CBUserdata);
@@ -40,6 +48,8 @@ namespace Qualia
 		{
 			TLSConnection *const Us = static_cast<TLSConnection*>(Userdata);
 
+			if (!Us) return;
+
 			if (Us->OnDisconnect)
 			{
 				(*Us->OnDisconnect)(*Us, Us->CBUserdata);
@@ -49,6 +59,8 @@ namespace Qualia
 		static void COnConnectCB(QualiaTLSConnection *const Connection, const char *const Hostname, const uint16_t PortNum, void *const Userdata)
 		{
 			TLSConnection *const Us = static_cast<TLSConnection*>(Userdata);
+
+			if (!Us) return;
 
 			if (Us->OnConnect)
 			{
@@ -114,17 +126,25 @@ namespace Qualia
 
 		virtual QUALIA_FORCE_INLINE ~TLSConnection(void)
 		{
+			if (!this->Internal) return;
+			
 			QualiaTLSConnection_Destroy(this->Internal);
 		}
 		
 	};
+	
 	class TLSServer
 	{
 	public:
 		typedef void OnRecvStreamType(TLSServer&, const uint32_t, Stream, void *Userdata);
 		typedef void OnClientDisconnectType(TLSServer&, const uint32_t, void *Userdata);
 		typedef void OnClientConnectType(TLSServer&, const uint32_t, const char *IP, void *Userdata);
-		
+
+		//No copies or moves, it invalidates pointers fed into the C layer.
+		TLSServer(const TLSServer&) = delete;
+		TLSServer &operator=(const TLSServer&) = delete;
+		TLSServer(TLSServer &&) = delete;
+		TLSServer &operator=(TLSServer&&) = delete;
 	private:
 		QualiaContext *Ctx;
 		void *CBUserdata;
@@ -139,6 +159,8 @@ namespace Qualia
 		{
 			TLSServer *const Us = static_cast<TLSServer*>(Userdata);
 
+			if (!Us) return;
+
 			if (Us->OnRecvStream)
 			{
 				(*Us->OnRecvStream)(*Us, ClientID, Stream{ RecvStream }, Us->CBUserdata);
@@ -149,6 +171,8 @@ namespace Qualia
 		{
 			TLSServer *const Us = static_cast<TLSServer*>(Userdata);
 
+			if (!Us) return;
+			
 			if (Us->OnClientDisconnect)
 			{
 				(*Us->OnClientDisconnect)(*Us, ClientID, Us->CBUserdata);
@@ -158,6 +182,8 @@ namespace Qualia
 		static void COnClientConnectCB(QualiaTLSServer *const Server, const uint32_t ClientID, const char *IP, void *Userdata)
 		{
 			TLSServer *const Us = static_cast<TLSServer*>(Userdata);
+
+			if (!Us) return;
 
 			if (Us->OnClientConnect)
 			{
@@ -230,6 +256,8 @@ namespace Qualia
 
 		virtual QUALIA_FORCE_INLINE ~TLSServer(void)
 		{
+			if (!this->Internal) return;
+			
 			QualiaTLSServer_Shutdown(this->Internal);
 		}
 		

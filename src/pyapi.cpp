@@ -141,9 +141,9 @@ PYBIND11_MODULE(libqualia, ModObj)
 						std::optional<std::function<void(Qualia::TLSServer &Conn, const uint32_t ClientID, const std::string &IP)>> OnClientConnect,
 						const std::string &ServerCert,
 						const std::string &PrivateKey,
-						const uint16_t PortNum) -> Qualia::TLSServer
+						const uint16_t PortNum) -> Qualia::TLSServer*
 		{
-			return	Qualia::TLSServer
+			return new Qualia::TLSServer
 					{
 						PyQualiaCtx,
 						[OnRecvStream = std::move(OnRecvStream)](Qualia::TLSServer &C, const uint32_t ClientID, Qualia::Stream S, void *)
@@ -163,7 +163,7 @@ PYBIND11_MODULE(libqualia, ModObj)
 						PortNum,
 						nullptr
 					};
-		}))
+		}), py::return_value_policy::take_ownership)
 		.def("SendStream", [](Qualia::TLSServer &Us, const uint32_t ClientID, Qualia::Stream &Out) -> bool
 		{
 			return Us.SendStream(ClientID, std::move(Out));
@@ -177,9 +177,9 @@ PYBIND11_MODULE(libqualia, ModObj)
 						std::optional<std::function<void(Qualia::TLSConnection &Conn, const std::string &Hostname, const uint16_t PortNum)>> OnConnect,
 						const std::string &CACert,
 						const std::string &Hostname,
-						const uint16_t PortNum) -> Qualia::TLSConnection
+						const uint16_t PortNum) -> Qualia::TLSConnection*
 		{
-			return	Qualia::TLSConnection
+			return new Qualia::TLSConnection
 					{
 						PyQualiaCtx,
 						[OnRecvStream = std::move(OnRecvStream)](Qualia::TLSConnection &C, Qualia::Stream S, void *)
@@ -199,7 +199,7 @@ PYBIND11_MODULE(libqualia, ModObj)
 						PortNum,
 						nullptr
 					};
-		}))
+		}), py::return_value_policy::take_ownership)
 		.def("SendStream", [](Qualia::TLSConnection &Us, Qualia::Stream &Out) -> bool
 		{
 			return Us.SendStream(std::move(Out));

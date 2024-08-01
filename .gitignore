@@ -6,6 +6,7 @@
 **/*.dylib
 **/*.elf
 **/*.dll
+**/vgcore*
 build/
 b/
 **/*.pem

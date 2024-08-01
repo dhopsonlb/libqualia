@@ -36,14 +36,15 @@
 typedef struct QueuedStream
 {
 	QualiaStream *Stream;
-	struct QueuedStream *Next;
+	struct QueuedStream *Next; //Towards the back (tail) of the queue.
+	struct QueuedStream *Prev; //Towards the front (head) of the queue.
 	uint32_t Written;
 } QueuedStream;
 
 typedef struct QualiaStreamOutQueue
 {
-	QueuedStream *Head; //Always the newest stream in the queue.
-	QueuedStream *Tail; //Always the oldest, next-to-be-sent stream in the queue.
+	QueuedStream *Front; //Always the newest stream in the queue.
+	QueuedStream *Back; //Always the oldest, next-to-be-sent stream in the queue.
 	size_t Size; //Number of outgoing streams.
 } QualiaStreamOutQueue;
 
@@ -117,7 +118,8 @@ static TLSClient *InitTLSClient(QualiaTLSServer *const Server,
 static TLSClient *LookupClient(TLSServerInternal *const I, const uint32_t ID);
 static int ProcessAccepts(	QualiaTLSServer *const Server,
 							char *ErrOut, const size_t ErrOutCapacity);
-static bool QualiaStreamOutQueue_Push(QualiaContext *const Ctx, QualiaStreamOutQueue *const OutQueue, QualiaStream *const Stream);
+static bool QualiaStreamOutQueue_PushFront(QualiaContext *const Ctx, QualiaStreamOutQueue *const OutQueue, QualiaStream *const Stream);
+static bool QualiaStreamOutQueue_PopBack(QualiaContext *const Ctx, QualiaStreamOutQueue *const OutQueue);
 static int QualiaStreamOutQueue_Tx(QualiaContext *const Ctx, QualiaStreamOutQueue *const OutQueue, SSL *SSLObj, int *const ErrorCodeOut);
 static void QualiaStreamOutQueue_Destroy(QualiaContext *const Ctx, QualiaStreamOutQueue *const OutQueue);
 static void PartialQualiaStream_AutoExtractStreamSize(PartialQualiaStream *const Partial);
@@ -477,7 +479,7 @@ bool QualiaTLSConnection_SendStream(QualiaTLSConnection *const Conn, QualiaStrea
 	
 	TLSConnectionInternal *const I = Conn->Internal;
 
-	return QualiaStreamOutQueue_Push(I->Ctx, &I->OutQueue, Stream);
+	return QualiaStreamOutQueue_PushFront(I->Ctx, &I->OutQueue, Stream);
 }
 
 void QualiaTLSServer_Shutdown(QualiaTLSServer *const Server)
@@ -516,7 +518,7 @@ static QUALIA_FORCE_INLINE uint32_t GetServerClientID(TLSServerInternal *const I
 
 static void QualiaStreamOutQueue_Destroy(QualiaContext *const Ctx, QualiaStreamOutQueue *const OutQueue)
 {
-	QueuedStream *Worker = OutQueue->Tail;
+	QueuedStream *Worker = OutQueue->Front;
 
 	while (Worker != NULL)
 	{
@@ -530,31 +532,58 @@ static void QualiaStreamOutQueue_Destroy(QualiaContext *const Ctx, QualiaStreamO
 	}
 }
 
-static bool QualiaStreamOutQueue_Push(QualiaContext *const Ctx, QualiaStreamOutQueue *const OutQueue, QualiaStream *const Stream)
+static bool QualiaStreamOutQueue_PopBack(QualiaContext *const Ctx, QualiaStreamOutQueue *const OutQueue)
 {
-	if (!OutQueue->Head)
+	if (!OutQueue || !OutQueue->Back) return false;
+
+	QueuedStream *Back = OutQueue->Back;
+	QualiaStream *const Stream = Back->Stream;
+
+	Qualia_Stream_Destroy(Stream);
+
+	if (Back->Prev != NULL)
+	{ //We have another stream to send after this one.
+		Back->Prev->Next = NULL; //Tell the stream after us to forget about us.
+
+		OutQueue->Back = Back->Prev;
+	}
+	else
+	{		
+		OutQueue->Back = NULL;
+		OutQueue->Front = NULL;
+	}
+
+	Ctx->FreeFunc(Back);
+
+	--OutQueue->Size;
+	return true;
+}
+
+static bool QualiaStreamOutQueue_PushFront(QualiaContext *const Ctx, QualiaStreamOutQueue *const OutQueue, QualiaStream *const Stream)
+{
+	if (!OutQueue->Front)
 	{
-		OutQueue->Head = OutQueue->Tail = Ctx->CallocFunc(1, sizeof(QueuedStream));
+		OutQueue->Front = OutQueue->Back = Ctx->CallocFunc(1, sizeof(QueuedStream));
 
-		if (!OutQueue->Head) return false;
+		if (!OutQueue->Front) return false;
 
-		OutQueue->Head->Stream = Stream;
+		OutQueue->Front->Stream = Stream;
 		OutQueue->Size = 1;
 		return true;
 	}
 
-	QueuedStream *const New = Ctx->CallocFunc(1, sizeof(QueuedStream));
+	QueuedStream *const NewFront = Ctx->CallocFunc(1, sizeof(QueuedStream));
 
-	if (!New) return false;
+	if (!NewFront) return false;
 
-	New->Stream = Stream;
+	NewFront->Stream = Stream;
 
-	if (!OutQueue->Tail)
-	{
-		OutQueue->Tail = OutQueue->Head;
-	}
-	OutQueue->Head->Next = New;
-	OutQueue->Head = New;
+	QueuedStream *OldFront = OutQueue->Front;
+
+	NewFront->Next = OldFront;
+	OldFront->Prev = NewFront;
+
+	OutQueue->Front = NewFront;
 
 	++OutQueue->Size;
 
@@ -563,9 +592,9 @@ static bool QualiaStreamOutQueue_Push(QualiaContext *const Ctx, QualiaStreamOutQ
 
 static int QualiaStreamOutQueue_Tx(QualiaContext *const Ctx, QualiaStreamOutQueue *const OutQueue, SSL *SSLObj, int *const ErrorCodeOut)
 {
-	if (!OutQueue->Tail) return 0;
+	if (!OutQueue->Back) return 0;
 
-	QueuedStream *const Queued = OutQueue->Tail;
+	QueuedStream *const Queued = OutQueue->Back;
 	QualiaStream *const Stream = Queued->Stream;
 
 	const uint32_t StreamSize = Qualia_Stream_GetSize(Stream);
@@ -592,14 +621,7 @@ static int QualiaStreamOutQueue_Tx(QualiaContext *const Ctx, QualiaStreamOutQueu
 	
 	if (Queued->Written >= StreamSize)
 	{
-		QueuedStream *const Next = OutQueue->Tail->Next;
-
-		Qualia_Stream_Destroy(OutQueue->Tail->Stream);
-
-		Ctx->FreeFunc(OutQueue->Tail);
-
-		OutQueue->Tail = Next; //Might be null if we're at the end.
-		--OutQueue->Size;
+		QualiaStreamOutQueue_PopBack(Ctx, OutQueue);
 	}
 
 	return Written;
@@ -1153,7 +1175,7 @@ bool QualiaTLSServer_SendStream(QualiaTLSServer *const Server, const uint32_t Cl
 
 	if (!Client) return false;
 
-	return QualiaStreamOutQueue_Push(I->Ctx, &Client->OutQueue, Stream);
+	return QualiaStreamOutQueue_PushFront(I->Ctx, &Client->OutQueue, Stream);
 }
 
 QualiaLoopStatus QualiaTLSServer_EventLoop(QualiaTLSServer *Server,	char *ErrOut, const size_t ErrOutCapacity)
