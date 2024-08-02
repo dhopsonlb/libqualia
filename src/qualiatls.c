@@ -329,11 +329,29 @@ QualiaTLSConnection *QualiaTLSConnection_Init(const QualiaTLSConnectionParams *c
 	New->CBUserdata = Params->CBUserdata;
 
 	//Fire up wolfSSL if it wasn't already.
-#ifdef QUALIA_USE_WOLFSSL
-	wolfSSL_Init();
-#else
-	SSL_library_init();
-#endif
+#ifndef QUALIA_SSL_ALREADY_INIT
+	static bool SSLInitialized;
+
+	if (!SSLInitialized)
+	{
+	#ifdef QUALIA_USE_WOLFSSL
+		wolfSSL_SetAllocators(Ctx->MallocFunc, Ctx->FreeFunc, Ctx->ReallocFunc);
+		wolfSSL_Init();
+	#else
+
+		#if !OPENSSL_VERSION_PREREQ(3, 0)
+		ERR_load_BIO_strings();
+		#endif // !OPENSSL_VERSION_PREREQ(3, 0)
+		
+		ERR_load_crypto_strings();
+		SSL_load_error_strings();
+		OpenSSL_add_all_digests();
+	    OpenSSL_add_ssl_algorithms();
+		SSL_library_init();
+	#endif //QUALIA_USE_WOLFSSL
+		SSLInitialized = true;
+	}
+#endif //QUALIA_SSL_ALREADY_INIT
 	
 	//Load certificate we manually verify against
 	BIO *const InBio = BIO_new_mem_buf((void*)Params->CACertData, Params->CACertLen);
@@ -848,10 +866,6 @@ QualiaTLSServer *QualiaTLSServer_Init(const QualiaTLSServerParams *const Params,
 	//Set up required functions.
 	New->Snprintf = Params->Snprintf;
 
-#ifdef QUALIA_USE_WOLFSSL //OpenSSL doesn't work on embedded anyways.
-	wolfSSL_SetAllocators(Ctx->MallocFunc, Ctx->FreeFunc, Ctx->ReallocFunc);
-#endif //QUALIA_USE_WOLFSSL
-
 	//Set up user callbacks.
 	New->OnRecvStream = Params->OnRecvStream;
 	New->OnClientConnect = Params->OnClientConnect;
@@ -859,21 +873,37 @@ QualiaTLSServer *QualiaTLSServer_Init(const QualiaTLSServerParams *const Params,
 	New->CBUserdata = Params->CBUserdata;
 	New->PortNum = Params->PortNum;
 
+#ifndef QUALIA_SSL_ALREADY_INIT
 
-#if QUALIA_USE_WOLFSSL
-	wolfSSL_Init();
-	
+	static bool SSLInitialized;
+
+	if (!SSLInitialized)
+	{
+		
+	#ifdef QUALIA_USE_WOLFSSL
+		wolfSSL_SetAllocators(Ctx->MallocFunc, Ctx->FreeFunc, Ctx->ReallocFunc);
+		wolfSSL_Init();
+	#else
+
+		#if !OPENSSL_VERSION_PREREQ(3, 0)
+		ERR_load_BIO_strings();
+		#endif // !OPENSSL_VERSION_PREREQ(3, 0)
+		
+		ERR_load_crypto_strings();
+		SSL_load_error_strings();
+		OpenSSL_add_all_digests();
+	    OpenSSL_add_ssl_algorithms();
+		SSL_library_init();
+
+	#endif //QUALIA_USE_WOLFSSL
+		SSLInitialized = true;
+	}
+
+#endif //QUALIA_SSL_ALREADY_INIT
+
+#ifdef QUALIA_USE_WOLFSSL
 	New->SSLCtx = SSL_CTX_new(wolfTLSv1_3_server_method());
 #else
-#if !OPENSSL_VERSION_PREREQ(3, 0)
-	ERR_load_BIO_strings();
-#endif // !OPENSSL_VERSION_PREREQ(3, 0)
-	ERR_load_crypto_strings();
-	SSL_load_error_strings();
-	OpenSSL_add_all_digests();
-    OpenSSL_add_ssl_algorithms();
-	SSL_library_init();
-	
 	New->SSLCtx = SSL_CTX_new(TLS_server_method());
 #endif //QUALIA_USE_WOLFSSL
 
