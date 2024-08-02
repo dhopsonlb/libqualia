@@ -3,7 +3,7 @@ if (NOT ENABLE_OQS) #Turn off OQS by default
 	set(DISABLE_OQS 1)
 endif()
 
-set(WOLFSSL_OPENSSLEXTRA ON)
+set(WOLFSSL_OPENSSLALL "yes" CACHE STRING "")
 set(WOLFSSL_FILESYSTEM "no")
 set(BUILD_SHARED_LIBS OFF)
 

@@ -33,6 +33,8 @@
 #include <esp_netif.h>
 #endif //ESP_PLATFORM
 
+#define QUALIATLS_MAX_TX_PER_ITER 4
+
 typedef struct QueuedStream
 {
 	QualiaStream *Stream;
@@ -153,7 +155,6 @@ QualiaLoopStatus QualiaTLSConnection_EventLoop(QualiaTLSConnection *const Conn, 
 	{
 		uint8_t Buffer[64] = { 0 };
 
-		size_t Read = 0;
 
 		fd_set PollSet;
 		FD_ZERO(&PollSet);
@@ -168,11 +169,11 @@ QualiaLoopStatus QualiaTLSConnection_EventLoop(QualiaTLSConnection *const Conn, 
 
 		I->NeedRXSelect = false;
 		
-		Err = SSL_read_ex(I->SSLObj, Buffer, sizeof Buffer, &Read);
+		const int Read = SSL_read(I->SSLObj, Buffer, sizeof Buffer);
 
-		if (Err == 0)
+		if (Read <= 0)
 		{
-			Err = SSL_get_error(I->SSLObj, Err);
+			Err = SSL_get_error(I->SSLObj, Read);
 
 			if (Err == SSL_ERROR_WANT_READ || Err == SSL_ERROR_WANT_WRITE)
 			{
@@ -198,8 +199,6 @@ QualiaLoopStatus QualiaTLSConnection_EventLoop(QualiaTLSConnection *const Conn, 
 			return QUALIA_QLS_SHUTDOWN;
 		}
 		
-		if (!Read) break;
-		
 		//We got data, so, we "did something".
 		DidAnything = true;
 
@@ -217,11 +216,15 @@ QualiaLoopStatus QualiaTLSConnection_EventLoop(QualiaTLSConnection *const Conn, 
 				Qualia_Stream_Destroy(NewStream);
 			}
 		}
-	} while (Err != 0);
+	} while (Err > 0);
 
 
 	int ErrorCode = 0;
-	while ((Err = QualiaStreamOutQueue_Tx(I->Ctx, &I->OutQueue, I->SSLObj, &ErrorCode)) > 0)
+	
+	for (uint32_t NumTx = 0u;
+		(Err = QualiaStreamOutQueue_Tx(I->Ctx, &I->OutQueue, I->SSLObj, &ErrorCode)) > 0 &&
+		NumTx < QUALIATLS_MAX_TX_PER_ITER;
+		++NumTx)
 	{
 		DidAnything = true;
 	}
@@ -905,7 +908,7 @@ QualiaTLSServer *QualiaTLSServer_Init(const QualiaTLSServerParams *const Params,
 		{
 			const int SSLErr = ERR_get_error();
 
-			Params->Snprintf(ErrOut, ErrOutCapacity, "Failed on wolfSSL_CTX_use_certificate_buffer ServerCert, got error integer %i", SSLErr);
+			Params->Snprintf(ErrOut, ErrOutCapacity, "Failed on SSL_CTX_use_certificate ServerCert, got error integer %i", SSLErr);
 		}
 
 		X509_free(RCert);
@@ -1088,8 +1091,6 @@ static int HandleClientEvents(	QualiaTLSServer *const Server,
 	
 	do
 	{
-		size_t Read = 0;
-
 		fd_set PollSet;
 		FD_ZERO(&PollSet);
 		FD_SET(Client->Sock, &PollSet);
@@ -1103,9 +1104,9 @@ static int HandleClientEvents(	QualiaTLSServer *const Server,
 
 		Client->NeedRXSelect = false;
 		
-		Err = SSL_read_ex(Client->SSLObj, Buffer, sizeof Buffer, &Read);
+		const int Read = SSL_read(Client->SSLObj, Buffer, sizeof Buffer);
 
-		if (Err > 0 && Read > 0)
+		if (Read > 0)
 		{
 			DidAnything = true;
 			
@@ -1146,11 +1147,14 @@ static int HandleClientEvents(	QualiaTLSServer *const Server,
 			}
 			return Err < 0 ? Err : -Err; //Ensure negative.
 		}
-	} while (Err != 0);
+	} while (Err > 0);
 
 	int SSLErr = 0;
 	
-	while ((Err = QualiaStreamOutQueue_Tx(I->Ctx, &Client->OutQueue, Client->SSLObj, &SSLErr)) > 0)
+	for (uint32_t NumTx = 0u;
+		(Err = QualiaStreamOutQueue_Tx(I->Ctx, &Client->OutQueue, Client->SSLObj, &SSLErr)) > 0 &&
+		NumTx < QUALIATLS_MAX_TX_PER_ITER;
+		++NumTx)
 	{
 		DidAnything = true;
 	}
