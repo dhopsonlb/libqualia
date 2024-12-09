@@ -298,7 +298,7 @@ namespace Qualia
 		QUALIA_FORCE_INLINE bool Push_String(const char *String) { return Qualia_Stream_Push_String(this->Internal, String); }
 		QUALIA_FORCE_INLINE bool Push_String(const char *String, const uint32_t Len) { return Qualia_Stream_Push_String_Len(this->Internal, String, Len); }
 		QUALIA_FORCE_INLINE bool Push_Byte(const uint8_t Byte) { return Qualia_Stream_Push_Byte(this->Internal, Byte); }
-		QUALIA_FORCE_INLINE bool Push_Bool(const bool Value) { return Qualia_Stream_Push_Byte(this->Internal, Value); }
+		QUALIA_FORCE_INLINE bool Push_Bool(const bool Value) { return Qualia_Stream_Push_Bool(this->Internal, Value); }
 		QUALIA_FORCE_INLINE bool Push_Uint16(const uint16_t Value) { return Qualia_Stream_Push_Uint16(this->Internal, Value); }
 		QUALIA_FORCE_INLINE bool Push_Int16(const int16_t Value) { return Qualia_Stream_Push_Int16(this->Internal, Value); }
 		QUALIA_FORCE_INLINE bool Push_Uint32(const uint32_t Value) { return Qualia_Stream_Push_Uint32(this->Internal, Value); }
