@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5.0)
 project("QualiaLib")
 
 execute_process(COMMAND git rev-parse --short HEAD OUTPUT_VARIABLE REVISION_)
-string(STRIP ${REVISION_} REVISION)
+string(STRIP "${REVISION_}" REVISION)
 
 if (EMBEDDED)
 	set(DISABLE_PKG_CONFIG 1)
