@@ -112,12 +112,12 @@ namespace Qualia
 
 	public:
 	
-		QUALIA_FORCE_INLINE QualiaVec(T *const Data = nullptr, const uint32_t DataLen = nullptr, FreeFuncType *const FreeFunc = nullptr)
+		QUALIA_FORCE_INLINE QualiaVec(T *const Data = nullptr, const uint32_t DataLen = 0, FreeFuncType *const FreeFunc = nullptr)
 			: FreeFunc{ FreeFunc }, Data{ Data }, DataLen{ DataLen }
 		{
 		}
 		
-		QUALIA_FORCE_INLINE QualiaVec(Qualia::Context &Ctx, T *const Data = nullptr, const uint32_t DataLen = nullptr)
+		QUALIA_FORCE_INLINE QualiaVec(Qualia::Context &Ctx, T *const Data = nullptr, const uint32_t DataLen = 0)
 			: FreeFunc{ Ctx.GetPtr()->FreeFunc }, Data{ Data }, DataLen{ DataLen }
 		{
 		}
